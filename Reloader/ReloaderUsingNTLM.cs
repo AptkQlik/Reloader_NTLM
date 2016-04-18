@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Net;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Permissions;
 using System.Security.Principal;
@@ -13,8 +15,8 @@ namespace Reloader
 	/// <summary>
 	/// This example is written to illustrate how to avoid consuming license tokens and how to use other credentials than the logged on user. 
 	/// It is important to NOT let the Location be disposed or instanciated more than once as each Location consumes a token. 
-	/// This example is a console exe that reloads apps using only one license token, a FileSystemWather is used to trigger app reloads.
-	/// When a file is created with the name of an app it will start a reload task on that app.
+	/// This example is a console exe that reloads apps using only one license token. It also show how impersonation can be used.
+	/// To keep this example simple a FileSystemWather is used to trigger app reloads. When a file is created with the name of an app it will enqueue a reload task.
 	/// 
 	/// I order to configure and run this example you will need to specify :
 	/// * reload folder (see _path)
@@ -23,12 +25,12 @@ namespace Reloader
 	/// * domain (see _domain)
 	/// * password (see _password)
 	/// 
-	/// It assumes that the proxy is configured to accept the computer running this example and that "Allow http" is enabled if accessing with "http://" or "ws://".
-	/// It assumes that the user is in the the "ContentAdmin" role (reload previleges).
+	/// This example assumes that the proxy is configured to accept the computer running this example and that "Allow http" is enabled if accessing with "http://" or "ws://".
+	/// It also assumes that the user is in the the "ContentAdmin" role (reload previleges).
 	/// 
 	/// This example does not cover cancelelation of the task or a ongoing reload.
 	/// </summary>
-	class Program
+	class ReloaderUsingNTLM
 	{
 		private static string _path = @"c:\reload"; // Set the path to a watcher folder
 		private static string _serverAddress = "https://qlikserver.mydomain.com";
@@ -85,7 +87,16 @@ namespace Reloader
 		private static bool DoSomeIdleWorkAndKeepTheSessionAlive()
 		{
 			if (Console.KeyAvailable)
+			{
+				var sessionCoockie = _qlikSenseServer.CustomUserHeaders["X-Qlik-Session"];
+				var request = WebRequest.Create(_serverAddress + "/qrs/user");
+				request.Headers.Add("X-Qlik-Session", sessionCoockie);
+				request.Method = "Delete";
+
+				var response = request.GetResponse();
+
 				return false; // Somebody pressed a key stop reloading
+			}
 
 			Console.Write(".");
 			System.Threading.Thread.Sleep(10000); // Give the qlik engine some time to reload.
